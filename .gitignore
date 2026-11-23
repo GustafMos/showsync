@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/_out/
+
+# undo backups written next to test/real result files
+*.backup-*.json
+# local launcher state
+tools/__pycache__/
