@@ -544,6 +544,8 @@ class ApplyPlan:
 class ApplyOptions:
     event_timelines: bool = True
     song_timelines: bool = True
+    song_align: str = "warp"           # songs with takes from several nights/owners: "warp" (speed-matched
+                                       # to the longest take, others muted) | "offset" (one offset per take)
     song_markers: bool = True
     tc_mode: str = "none"              # none | event | song
     propagate_source: str = ""         # clip id whose markers are propagated
@@ -1473,7 +1475,24 @@ def build_apply_plan(res: Result, tl_fps: float, opts: ApplyOptions) -> ApplyPla
             plan.timelines.append(build_event_timeline(res, gi, tl_fps, opts.frac))
     if opts.song_timelines:
         for song in res.songs:
-            tp = build_song_timeline(res, song, tl_fps, opts.handles_s, opts.whole_clips)
+            owners = {s["owner"] for s in res.song_segments(song["id"])}
+            if opts.song_align == "warp" and len(owners) > 1:
+                # Takes from different nights/owners: one constant offset per take (aligned at the song
+                # start) drifts with the tempo difference. Measured on real footage (2026-11-23): one
+                # night +600 ms, another wandering 0.2-1.5 s. So stack them like a master timeline:
+                # the longest take runs at its own time, every other take follows the song map,
+                # speed-matched within max_warp_pct, its audio muted (warped audio would be pitched).
+                tp = build_master_timeline(res, song, tl_fps, opts.handles_s, opts.whole_clips, None,
+                                           opts.max_warp_pct, "muted", opts.master_tol_frames)
+                if tp:
+                    old = tp.name
+                    tp.name = _safe_name("ShowSync Song - %s" % song["name"])
+                    tp.kind = "song"
+                    for mk in tp.markers:
+                        if mk.timeline == old:
+                            mk.timeline = tp.name
+            else:
+                tp = build_song_timeline(res, song, tl_fps, opts.handles_s, opts.whole_clips)
             if tp:
                 plan.timelines.append(tp)
     if opts.master_mode:

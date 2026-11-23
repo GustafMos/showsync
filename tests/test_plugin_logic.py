@@ -173,7 +173,7 @@ def test_event_timeline_plan(res):
 
 
 def test_song_timeline_plan(res):
-    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False))
+    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False, song_align="offset"))
     names = [t.name for t in plan.timelines]
     assert names == ["ShowSync Song - Alpha", "ShowSync Song - Beta"]
     alpha = plan.timelines[0]
@@ -470,7 +470,7 @@ def make_ref_result():
 
 def test_reference_in_group_is_optional_top_audio_track():
     res = make_ref_result()
-    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(tc_mode="event"))
+    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(tc_mode="event", song_align="offset"))
     g2 = next(t for t in plan.timelines if t.name.startswith("ShowSync G02"))
     assert g2.n_video == 2 and g2.n_audio == 3                      # D, E + reference on audio 3
     ref = [p for p in g2.placements if p.clip_id == "R"]
@@ -631,7 +631,7 @@ def test_song_handles_trimmed_at_song_start():
     assert a.record_frame == 0 and a.start_frame == 320 * 25                         # head handle cannot go before 0
     assert a.end_frame == 600 * 25                                                    # tail handle clamped to media end
     assert any("head handle trimmed" in w for w in tp.warnings)
-    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False,
+    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False, song_align="offset",
                                                                 handles_s=20.0))
     assert plan.timelines[1].placements[0].end_frame == 600 * 25
 
@@ -863,7 +863,7 @@ def test_missing_clips_leave_no_empty_tracks(tmp_path):
     res = make_result()
     paths = [c["path"] for c in res.clips.values() if not c["path"].endswith(("b_phone.mp4", "c_hi8.avi"))]
     layer = FakeLayer(paths, res)
-    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False))
+    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False, song_align="offset"))
     bk = core.Backup.new(str(tmp_path / "r.json"))
     errs = ops.apply_plan(layer, plan, bk, log=lambda m: None)
     assert all("clip not in media pool" in e for e in errs) and errs
@@ -1399,3 +1399,18 @@ def test_real_data_same_night_angles_agree_in_master_timelines(song_id):
             v.sort()
             assert abs(v[len(v) // 2]) <= 20.0, (res.clip_name(c), v[len(v) // 2])      # live bug: 40-100 ms
 
+
+
+def test_song_timeline_with_takes_from_several_owners_is_speed_matched():
+    """Real footage (2026-11-23): song timelines that placed each night with one offset drifted
+    0.6-1.5 s between nights. With takes from several owners the song timeline is now built like a
+    master: the longest take at its own time, the others following the song map, their audio muted."""
+    res = _master_night_result()
+    plan = core.build_apply_plan(res, TL_FPS, core.ApplyOptions(event_timelines=False, song_markers=False))
+    multi = [s for s in res.songs if len({x["owner"] for x in res.song_segments(s["id"])}) > 1]
+    assert multi
+    for s in multi:
+        tp = next(t for t in plan.timelines if t.name == core._safe_name("ShowSync Song - %s" % s["name"]))
+        assert tp.kind == "song"
+        assert tp.master_audio_slots                       # the base take's audio plays
+        assert tp.muted_audio_slots                        # other takes' audio is muted (they are speed-matched)

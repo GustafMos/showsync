@@ -16,7 +16,8 @@ mix of pro cameras, phones, Hi8 tapes and audio recorders. Built for DaVinci Res
 - **Results land in Resolve**:
   - one timeline per synced group, with all angles stacked and drifting angles re-cut so they
     never slip by more than half a frame;
-  - one timeline per song, with every take stacked on song time;
+  - one timeline per song, with every take stacked on song time and speed-matched to the longest take,
+    so takes from different nights stay on the beat;
   - song markers on clips;
   - optionally, rewritten timecode (event or song time). Every change can be undone.
 
@@ -37,7 +38,8 @@ muted.
 
 ![Master timeline: one song from three nights aligned to the master night](docs/img/master_timeline.jpg)
 
-**Every take of one song.** All takes from all nights, stacked on song time.
+**Every take of one song.** All takes from all nights. The longest take runs at its own time; the others
+follow the song, re-cut and speed-matched to it, with their audio muted.
 
 ![Song timeline: every take of one song stacked](docs/img/song_timeline.jpg)
 
