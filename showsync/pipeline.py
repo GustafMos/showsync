@@ -175,6 +175,7 @@ def analyze(paths: Iterable[str], refs: Optional[Iterable[str]] = None,
     songs = H.call_assign_songs(songs_mod, segments, seg_feats, ref_feats or None,
                                 tags, must, cannot, warnings, anchors)
     _exact_song_maps(groups, segments, songs, ref_ids)
+    warnings.extend(_continuous_takes(segments, songs))
     songs = _drop_lonely_nonmusic(songs, segments, seg_feats)
     say("songs", 1, 1, f"{len(songs)} songs")
 
@@ -207,6 +208,50 @@ def _exact_song_maps(groups, segments, songs, ref_ids):
             continue
         seg.song_map = g.maps[rcid].inverse()      # event time -> reference (song) time
         seg.match_score = max(seg.match_score, 0.99)
+
+
+TAKE_GAP_MAX_S = 60.0      # pieces of one recording this close belong to one continuous performance
+TAKE_JUMP_TOL_S = 2.0      # song-time jump between them tolerated before re-placing the later piece
+
+
+def _continuous_takes(segments, songs) -> list:
+    """One recording plays one song front to back: two pieces of the same song from the same owner,
+    separated by a short gap, must continue each other in song time at real-time pace. The musical
+    (DTW) map of a later piece can land on an earlier repeat of the same section (a chorus), which
+    would put one camera at two places at once. Real case (2026-11-23): a tape's second Auto piece,
+    32 s after the first, was mapped 49 s BACK into the first piece's song time; continuing at real
+    time put it exactly where the other nights' takes end. Such a piece is shifted to continue the
+    previous one, and the gap is filled at real-time pace. Returns notes for the warnings list."""
+    from .models import TimeMap
+    import numpy as np
+    notes = []
+    by_id = {s.id: s for s in segments}
+    for so in songs:
+        own = {}
+        for sid in so.segments:
+            sg = by_id.get(sid)
+            if sg is not None and sg.song_map is not None:
+                own.setdefault(sg.owner, []).append(sg)
+        for owner, segs in own.items():
+            segs.sort(key=lambda s: s.start)
+            for a, b in zip(segs, segs[1:]):
+                gap = b.start - a.end
+                if gap < 0 or gap > TAKE_GAP_MAX_S:
+                    continue
+                expect = float(a.song_map(a.end)) + gap
+                got = float(b.song_map(b.start))
+                if abs(got - expect) > TAKE_JUMP_TOL_S:
+                    m = b.song_map
+                    b.song_map = TimeMap(np.asarray(m.knots_src, float), np.asarray(m.knots_dst, float) + (expect - got))
+                    b.beat_synced = False
+                    notes.append(f"{so.name}: a later piece of the same recording ({owner}) was mapped {got - expect:+.1f} s "
+                                 f"away from where it continues the earlier piece; placed it in sequence instead")
+                if gap > 0:                       # fill the gap at real-time pace, as one continuous take
+                    src = np.append(np.asarray(a.song_map.knots_src, float), b.start)
+                    dst = np.append(np.asarray(a.song_map.knots_dst, float), expect)
+                    a.song_map = TimeMap(src, dst)
+                    a.end = b.start
+    return notes
 
 
 LONELY_MIN_MUSICNESS = 0.3
