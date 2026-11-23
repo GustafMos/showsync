@@ -401,7 +401,7 @@ def main():
             res = state["result"]
             if res is None:
                 return
-            fps, _drop = layer.project_fps()
+            fps = core.footage_fps(res, layer.project_fps()[0])   # timelines follow the footage, not the project default
             mode = ("none", "event", "song")[it["TcMode"].CurrentIndex]
             try:
                 handles = max(0.0, float(it["Handles"].Text))

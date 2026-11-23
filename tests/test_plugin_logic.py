@@ -1414,3 +1414,17 @@ def test_song_timeline_with_takes_from_several_owners_is_speed_matched():
         assert tp.kind == "song"
         assert tp.master_audio_slots                       # the base take's audio plays
         assert tp.muted_audio_slots                        # other takes' audio is muted (they are speed-matched)
+
+
+def test_footage_fps_follows_the_footage_not_the_project():
+    """Real tour project (2026-11-23) was 24 fps while phones/cameras were 25 and tapes 50."""
+    d = {"clips": {
+        "t": {"path": "C:/m/tape.mov", "fps": 50.0, "duration": 3000.0, "has_video": True, "has_audio": True},
+        "p": {"path": "C:/m/phone.mp4", "fps": 25.0, "duration": 900.0, "has_video": True, "has_audio": True},
+        "c": {"path": "C:/m/cam.mp4", "fps": 25.0, "duration": 2600.0, "has_video": True, "has_audio": True},
+        "a": {"path": "C:/m/rec.wav", "fps": 0.0, "duration": 3600.0, "has_video": False, "has_audio": True}},
+        "groups": [], "segments": [], "songs": [], "matches": [], "loners": []}
+    res = core.Result(d, "")
+    assert core.footage_fps(res) == 25.0
+    d["clips"] = {"x": {"path": "C:/m/x.mov", "fps": 29.97, "duration": 100.0, "has_video": True, "has_audio": True}}
+    assert core.footage_fps(core.Result(d, "")) == 29.97

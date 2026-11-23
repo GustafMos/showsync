@@ -1515,6 +1515,24 @@ def build_apply_plan(res: Result, tl_fps: float, opts: ApplyOptions) -> ApplyPla
 
 # --------------------------------------------------------------------------- result summary rows
 
+def footage_fps(res: Result, fallback: float = 25.0) -> float:
+    """Timeline rate that suits the footage: the rate most of the video (by duration) plays at
+    cleanly. A clip at twice a rate plays cleanly at it (50p tape on a 25p timeline), so 25 collects
+    the 50 fps clips too. Real tour footage: phones/Canon/camcorders 25, tapes 50 -> 25."""
+    weight: dict = {}
+    for cid, c in res.clips.items():
+        if res.is_reference(cid) or not res.has_video(cid):
+            continue
+        f = float(c.get("fps") or 0)
+        if f <= 0:
+            continue
+        weight[round(f, 3)] = weight.get(round(f, 3), 0.0) + float(c.get("duration") or 0.0)
+    if not weight:
+        return fallback
+    score = {r: w + weight.get(round(2 * r, 3), 0.0) for r, w in weight.items()}
+    return max(score, key=lambda r: (score[r], -r))
+
+
 def summarize_result(res: Result, tl_fps: float = 24.0) -> list:
     """One dict per clip for the review table."""
     rows = []

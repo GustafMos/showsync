@@ -424,6 +424,17 @@ class ResolveLayer(LayerBase):
         tl = self.pool.CreateEmptyTimeline(name, start_tc)   # None if the name is taken/invalid
         if tl is not None:
             self.project.SetCurrentTimeline(tl)
+            # Verified live (Resolve 21.2): an EMPTY timeline takes its own frame rate even when the
+            # project's differs (project 24, timeline 25). Without this every timeline got the project
+            # rate whatever the footage was shot at.
+            try:
+                proj = float(self.project.GetSetting("timelineFrameRate") or 0)
+            except (TypeError, ValueError):
+                proj = 0.0
+            if fps and abs(float(fps) - proj) > 1e-3:
+                txt = ("%d" % round(fps)) if abs(fps - round(fps)) < 1e-6 else ("%.3f" % fps)
+                tl.SetSetting("useCustomSettings", "1")
+                tl.SetSetting("timelineFrameRate", txt)
         return tl
 
     def timeline_start_frame(self, tl):
