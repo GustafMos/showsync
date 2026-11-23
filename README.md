@@ -64,6 +64,16 @@ Then in Resolve: **Workspace → Scripts → ShowSync**. See `resolve_plugin/REA
 .venv\Scripts\python -m showsync fix-audio showsync_result.json recorder.wav --to cam_a.mov
 ```
 
+## Getting footage off a phone
+
+Large phone clips (tens of GB) can be sent straight to your editing PC over Wi-Fi or Tailscale with
+[dropdock](https://github.com/GustafMos/dropdock), a small resumable upload server that started here:
+
+```powershell
+pip install git+https://github.com/GustafMos/dropdock
+dropdock
+```
+
 ## How it works
 
 Read `docs/ARCHITECTURE.md`, which explains the two levels of "together":
